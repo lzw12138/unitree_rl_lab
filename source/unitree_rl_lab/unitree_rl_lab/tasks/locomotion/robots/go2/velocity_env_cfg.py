@@ -4,6 +4,9 @@ import isaaclab.sim as sim_utils
 import isaaclab.terrains as terrain_gen
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
+from isaaclab.sim import SimulationCfg
+from isaaclab.sim._impl.newton_manager_cfg import NewtonCfg
+from isaaclab.sim._impl.solvers_cfg import MJWarpSolverCfg
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
@@ -372,6 +375,22 @@ class CurriculumCfg:
 class RobotEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the locomotion velocity-tracking environment."""
 
+    sim: SimulationCfg = SimulationCfg(
+        newton_cfg=NewtonCfg(
+            solver_cfg=MJWarpSolverCfg(
+                njmax=210,
+                nconmax=35,
+                ls_iterations=10,
+                ls_parallel=True,
+                cone="pyramidal",
+                impratio=1,
+                integrator="implicit",
+            ),
+            num_substeps=1,
+            debug_mode=False,
+        )
+    )
+
     # Scene settings
     scene: RobotSceneCfg = RobotSceneCfg(num_envs=4096, env_spacing=2.5, replicate_physics=True)
     # Basic settings
@@ -394,11 +413,6 @@ class RobotEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         # self.sim.physics_material = self.scene.terrain.physics_material
         # self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
-        self.sim.newton_cfg.solver_cfg.nefc_per_env = 80
-        self.sim.newton_cfg.solver_cfg.ls_iterations = 15
-        self.sim.newton_cfg.solver_cfg.cone = "elliptic"
-        self.sim.newton_cfg.solver_cfg.impratio = 100.0
-        self.sim.newton_cfg.solver_cfg.ls_parallel = True
 
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
