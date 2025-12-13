@@ -4,9 +4,6 @@ import isaaclab.sim as sim_utils
 import isaaclab.terrains as terrain_gen
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
-from isaaclab.sim import SimulationCfg
-from isaaclab.sim._impl.newton_manager_cfg import NewtonCfg
-from isaaclab.sim._impl.solvers_cfg import MJWarpSolverCfg
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
@@ -376,22 +373,6 @@ class CurriculumCfg:
 @configclass
 class RobotEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the locomotion velocity-tracking environment."""
-
-    sim: SimulationCfg = SimulationCfg(
-        newton_cfg=NewtonCfg(
-            solver_cfg=MJWarpSolverCfg(
-                njmax=210,
-                nconmax=35,
-                ls_iterations=10,
-                ls_parallel=True,
-                cone="pyramidal",
-                impratio=1,
-                integrator="implicit",
-            ),
-            num_substeps=1,
-            debug_mode=False,
-        )
-    )
 
     # Scene settings
     scene: RobotSceneCfg = RobotSceneCfg(num_envs=4096, env_spacing=2.5, replicate_physics=True)
