@@ -1,3 +1,8 @@
+"""
+Unitree H1 机器人速度跟踪环境配置
+定义了用于训练 H1 机器人速度跟踪任务的完整环境配置
+"""
+
 import math
 
 import isaaclab.sim as sim_utils
@@ -39,7 +44,10 @@ COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
 
 @configclass
 class RobotSceneCfg(InteractiveSceneCfg):
-    """Configuration for the terrain scene with a legged robot."""
+    """
+    机器人场景配置
+    定义了训练环境中的场景元素，包括地形、机器人、传感器和光照
+    """
 
     # ground terrain
     terrain = TerrainImporterCfg(
@@ -86,7 +94,10 @@ class RobotSceneCfg(InteractiveSceneCfg):
 
 @configclass
 class EventCfg:
-    """Configuration for events."""
+    """
+    事件配置
+    定义了在训练过程中发生的各种事件，用于域随机化和提高鲁棒性
+    """
 
     # startup
     physics_material = EventTerm(
@@ -158,7 +169,10 @@ class EventCfg:
 
 @configclass
 class CommandsCfg:
-    """Command specifications for the MDP."""
+    """
+    命令配置
+    定义了智能体需要跟踪的目标命令（速度命令）
+    """
 
     base_velocity = mdp.UniformLevelVelocityCommandCfg(
         asset_name="robot",
@@ -178,7 +192,10 @@ class CommandsCfg:
 
 @configclass
 class ActionsCfg:
-    """Action specifications for the MDP."""
+    """
+    动作配置
+    定义了智能体可以执行的动作空间（关节位置控制）
+    """
 
     JointPositionAction = mdp.JointPositionActionCfg(
         asset_name="robot", joint_names=[".*"], scale=0.25, use_default_offset=True
@@ -187,7 +204,11 @@ class ActionsCfg:
 
 @configclass
 class ObservationsCfg:
-    """Observation specifications for the MDP."""
+    """
+    观察配置
+    定义了智能体可以观察到的状态信息
+    包括策略网络（Policy）和值函数网络（Critic）的观察
+    """
 
     @configclass
     class PolicyCfg(ObsGroup):
@@ -237,7 +258,11 @@ class ObservationsCfg:
 
 @configclass
 class RewardsCfg:
-    """Reward terms for the MDP."""
+    """
+    奖励配置
+    定义了强化学习训练中使用的所有奖励项
+    每个奖励项都有权重（weight），用于平衡不同目标的重要性
+    """
 
     # -- task
     track_lin_vel_xy = RewTerm(
@@ -339,7 +364,10 @@ class RewardsCfg:
 
 @configclass
 class TerminationsCfg:
-    """Termination terms for the MDP."""
+    """
+    终止条件配置
+    定义了导致回合结束的条件（如摔倒、超时等）
+    """
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     base_height = DoneTerm(func=mdp.root_height_below_minimum, params={"minimum_height": 0.3})
@@ -359,7 +387,10 @@ class TerminationsCfg:
 
 @configclass
 class CurriculumCfg:
-    """Curriculum terms for the MDP."""
+    """
+    课程学习配置
+    定义了在训练过程中逐步增加任务难度的策略
+    """
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
     lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels)
@@ -367,7 +398,10 @@ class CurriculumCfg:
 
 @configclass
 class RobotEnvCfg(ManagerBasedRLEnvCfg):
-    """Configuration for the locomotion velocity-tracking environment."""
+    """
+    机器人环境配置
+    整合了所有配置类，定义了完整的强化学习环境
+    """
 
     # Scene settings
     scene: RobotSceneCfg = RobotSceneCfg(num_envs=4096, env_spacing=2.5)
@@ -412,9 +446,14 @@ class RobotEnvCfg(ManagerBasedRLEnvCfg):
 
 @configclass
 class RobotPlayEnvCfg(RobotEnvCfg):
+    """
+    机器人演示环境配置
+    用于演示和评估训练好的策略，与训练环境相比环境数量更少、地形更简单
+    """
     def __post_init__(self):
         super().__post_init__()
-        self.scene.num_envs = 32
-        self.scene.terrain.terrain_generator.num_rows = 2
-        self.scene.terrain.terrain_generator.num_cols = 10
+        self.scene.num_envs = 32  # 演示时使用更少的环境
+        self.scene.terrain.terrain_generator.num_rows = 2  # 减少地形行数
+        self.scene.terrain.terrain_generator.num_cols = 10  # 减少地形列数
+        # 使用最大速度范围（测试完整性能）
         self.commands.base_velocity.ranges = self.commands.base_velocity.limit_ranges
