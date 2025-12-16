@@ -340,15 +340,39 @@ class RewardsCfg:
     # 存活奖励：鼓励机器人保持站立，不摔倒
     alive = RewTerm(func=mdp.is_alive, weight=0.15)
 
-    # -- base
-    base_linear_velocity = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
+    # -- 基础奖励项（惩罚项，权重为负值）
+    # 惩罚垂直方向（z轴）的线速度：防止机器人在移动时上下跳动，保持稳定的高度
+    # 使用 L2 范数（平方和）计算惩罚，权重较大（-2.0）以确保机器人保持稳定
+    base_linear_velocity = RewTerm(func=mdp.lin_vel_z _l2, weight=-2.0)
+    
+    # 惩罚水平方向的角速度（roll 和 pitch）：防止机器人前后左右翻滚，保持姿态稳定
+    # 权重较小（-0.05），因为轻微的倾斜是可以接受的，主要防止严重翻滚
     base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    
+    # 惩罚关节速度：鼓励关节运动平滑，避免突然的快速运动
+    # 使用 L2 范数计算所有关节速度的平方和，权重很小（-0.001）作为软约束
     joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
+    
+    # 惩罚关节加速度：进一步鼓励平滑运动，避免关节加速度过大导致的不稳定
+    # 权重非常小（-2.5e-7），主要用于防止极端情况下的剧烈加速
     joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
+    
+    # 惩罚动作变化率：鼓励动作平滑过渡，避免相邻时间步之间的动作突变
+    # 计算连续动作之间的 L2 范数差异，权重为 -0.05，有助于生成更自然的运动轨迹
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
+    
+    # 惩罚关节超出位置限制：当关节位置超出物理限制时给予惩罚
+    # 权重较大（-5.0），这是硬约束，必须严格遵守，防止关节损坏或运动学错误
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
+    
+    # 惩罚能量消耗：鼓励机器人使用更少的能量完成任务，提高能效
+    # 能量 = Σ|关节速度| × |关节力矩|，权重很小（-2e-5），在保证性能的前提下优化能耗
     energy = RewTerm(func=mdp.energy, weight=-2e-5)
 
+    # -- 关节偏差惩罚（鼓励保持默认姿态）
+    # 惩罚手臂关节偏离默认位置：包括肩部、肘部和腕部关节
+    # 使用 L1 范数（绝对值之和）计算偏差，权重较小（-0.1），允许手臂有一定的灵活性
+    # 这有助于机器人在移动时保持手臂相对稳定的姿态，避免过度摆动
     joint_deviation_arms = RewTerm(
         func=mdp.joint_deviation_l1,
         weight=-0.1,
@@ -356,13 +380,16 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg(
                 "robot",
                 joint_names=[
-                    ".*_shoulder_.*_joint",
-                    ".*_elbow_joint",
-                    ".*_wrist_.*",
+                    ".*_shoulder_.*_joint",  # 所有肩部关节（pitch, roll, yaw）
+                    ".*_elbow_joint",  # 肘部关节
+                    ".*_wrist_.*",  # 所有腕部关节
                 ],
             )
         },
     )
+    
+    # 惩罚腰部关节偏离默认位置：腰部关节对整体姿态稳定性很重要
+    # 权重较大（-1），因为腰部姿态直接影响机器人的平衡和运动效率
     joint_deviation_waists = RewTerm(
         func=mdp.joint_deviation_l1,
         weight=-1,
@@ -370,61 +397,90 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg(
                 "robot",
                 joint_names=[
-                    "waist.*",
+                    "waist.*",  # 所有腰部关节
                 ],
             )
         },
     )
+    
+    # 惩罚腿部髋关节偏离默认位置：包括髋部 roll 和 yaw 关节
+    # 权重较大（-1.0），这些关节对步态和平衡至关重要，需要保持相对稳定的配置
     joint_deviation_legs = RewTerm(
         func=mdp.joint_deviation_l1,
         weight=-1.0,
         params={"asset_cfg": SceneEntityCfg(
-            "robot", joint_names=[".*_hip_roll_joint", ".*_hip_yaw_joint"])},
+            "robot", joint_names=[".*_hip_roll_joint", ".*_hip_yaw_joint"])},  # 髋部 roll 和 yaw 关节
     )
 
-    # -- robot
+    # -- 机器人姿态相关奖励
+    # 惩罚不平坦的姿态：鼓励机器人保持水平姿态（roll 和 pitch 接近 0）
+    # 使用 L2 范数计算姿态偏差，权重较大（-5.0），确保机器人不会过度倾斜或翻滚
+    # 这对于双足机器人的稳定性至关重要
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-5.0)
-    base_height = RewTerm(func=mdp.base_height_l2, weight=-
-                          10, params={"target_height": 0.78})
+    
+    # 惩罚基座高度偏离目标高度：鼓励机器人保持目标高度（0.78米）
+    # 使用 L2 范数计算高度误差，权重很大（-10），确保机器人保持正确的站立高度
+    # 高度过低可能导致机器人蹲下或摔倒，过高可能导致不稳定
+    base_height = RewTerm(func=mdp.base_height_l2, weight=-10, params={"target_height": 0.78})
 
-    # -- feet
+    # -- 足部相关奖励
+    # 奖励符合期望步态的足部接触模式：鼓励机器人按照正确的步态周期移动
+    # period=0.8秒：步态周期为 0.8 秒
+    # offset=[0.0, 0.5]：两足的相位差为 180 度（交替步态）
+    # threshold=0.55：相位低于 0.55 时视为支撑相（stance phase），否则为摆动相（swing phase）
+    # 奖励符合步态时给予正向奖励（weight=0.5），有助于形成稳定、协调的步态
     gait = RewTerm(
         func=mdp.feet_gait,
         weight=0.5,
         params={
-            "period": 0.8,
-            "offset": [0.0, 0.5],
-            "threshold": 0.55,
-            "command_name": "base_velocity",
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*ankle_roll.*"),
+            "period": 0.8,  # 步态周期（秒）
+            "offset": [0.0, 0.5],  # 两足的相位偏移（180度相位差，交替步态）
+            "threshold": 0.55,  # 支撑相/摆动相的相位阈值
+            "command_name": "base_velocity",  # 只在有速度命令时给予奖励
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*ankle_roll.*"),  # 检测踝关节的接触
         },
     )
+    
+    # 惩罚足部在地面上滑动：当足部与地面接触时，不应该有水平滑动
+    # 权重为 -0.2，惩罚足部滑动有助于提高步态的稳定性和能量效率
+    # 滑动会导致能量浪费和步态不稳定
     feet_slide = RewTerm(
         func=mdp.feet_slide,
         weight=-0.2,
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*ankle_roll.*"),
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),  # 检测踝关节位置
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*ankle_roll.*"),  # 检测踝关节接触力
         },
     )
+    
+    # 奖励摆动足部达到目标离地高度：鼓励机器人在摆动阶段将足部抬起到合适的高度
+    # target_height=0.1米：目标离地高度为 10 厘米
+    # std=0.05：标准差，控制奖励衰减速度
+    # tanh_mult=2.0：tanh 函数的倍数，用于根据足部水平速度缩放奖励
+    # 使用指数函数计算奖励，高度越接近目标，奖励越大（weight=1.0）
+    # 这有助于避免足部拖地，确保足够的离地间隙
     feet_clearance = RewTerm(
         func=mdp.foot_clearance_reward,
         weight=1.0,
         params={
-            "std": 0.05,
-            "tanh_mult": 2.0,
-            "target_height": 0.1,
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),
+            "std": 0.05,  # 标准差，控制奖励衰减速度
+            "tanh_mult": 2.0,  # tanh 函数倍数，用于速度缩放
+            "target_height": 0.1,  # 目标离地高度（米）
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle_roll.*"),  # 检测踝关节位置
         },
     )
 
-    # -- other
+    # -- 其他奖励项
+    # 惩罚不期望的身体部位与地面接触：除了足部（ankle）外，其他部位不应该接触地面
+    # threshold=1：接触力阈值，超过此值视为接触
+    # body_names 使用正则表达式 "(?!.*ankle.*).*"：匹配所有不包含 "ankle" 的身体部位
+    # 权重为 -1，防止机器人其他部位（如膝盖、躯干等）意外接触地面，这可能导致摔倒或损坏
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
         weight=-1,
         params={
-            "threshold": 1,
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["(?!.*ankle.*).*"]),
+            "threshold": 1,  # 接触力阈值
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["(?!.*ankle.*).*"]),  # 排除踝关节的所有身体部位
         },
     )
 
